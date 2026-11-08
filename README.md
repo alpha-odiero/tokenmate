@@ -6,7 +6,7 @@ A React PWA for apartment mates to record, review and exchange prepaid electrici
 
 | Landing | Overview | Payments | Settings |
 |---------|----------|----------|----------|
-| ![Landing page](src/assets/landing.png) | ![Overview dashboard](src/assets/overview.png) | ![Payment history](src/assets/payment.png) | ![Settings](src/assets/setting.png) |
+| ![Landing page](tokenmate/src/assets/landing.png) | ![Overview dashboard](tokenmate/src/assets/overview.png) | ![Payment history](tokenmate/src/assets/payment.png) | ![Settings](tokenmate/src/assets/setting.png) |
 
 ## Features in this MVP
 - Responsive landing page and app dashboard.
@@ -30,12 +30,14 @@ A React PWA for apartment mates to record, review and exchange prepaid electrici
 
 ## Run locally
 ```bash
+cd tokenmate
 npm install
 npm run dev
 ```
 Open the local URL printed by Vite. To test PWA install/offline behavior, use a production build served over localhost:
 
 ```bash
+cd tokenmate
 npm run build
 npm run preview
 ```
