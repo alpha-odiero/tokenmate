@@ -1,0 +1,1 @@
+{"name":"TokenMate — Shared KPLC Token Tracker","short_name":"TokenMate","description":"Track and share household KPLC token contributions.","start_url":"/","display":"standalone","background_color":"#f4f7fc","theme_color":"#0b4fa8","lang":"en","scope":"/","icons":[{"src":"/tokenmate.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}
