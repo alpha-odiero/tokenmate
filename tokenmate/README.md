@@ -2,6 +2,8 @@
 
 A React PWA for apartment mates to record, review and exchange prepaid electricity token payment evidence.
 
+Live app: https://tokenmate.vercel.app/
+
 ## Screenshots
 
 | Landing | Overview | Payments | Settings |
@@ -39,6 +41,18 @@ Open the local URL printed by Vite. To test PWA install/offline behavior, use a 
 npm run build
 npm run preview
 ```
+
+## Install as an app
+
+TokenMate ships as an installable PWA and as an Android Trusted Web Activity (TWA) package.
+
+- **Web/PWA:** open https://tokenmate.vercel.app/ in Chrome, Edge or Safari, then choose **Install app** or **Add to Home Screen**. The installed app opens standalone and keeps working offline.
+- **Android APK:** download [`TokenMate.apk`](public/downloads/TokenMate.apk), or use the **Get the app** button on an Android device. Android may ask you to allow installs from the browser.
+- **Google Play:** upload `packages/google-play/TokenMate.aab` in Play Console. The Android package name is `app.vercel.tokenmate.twa`.
+
+TWA verification uses `public/.well-known/assetlinks.json`, served at `https://tokenmate.vercel.app/.well-known/assetlinks.json`. Keep its SHA-256 fingerprint in sync with the signing certificate, especially when Play App Signing is enabled—use the Play Console fingerprint instead of the local keystore fingerprint.
+
+Signing material (`signing.keystore`, `signing-key-info.txt`) is intentionally not committed. Back it up securely.
 
 ## Test the apartment workflow
 1. On Device A, open Settings and add your name, your apartment mate's name and any other apartment mates. Select the current device owner.

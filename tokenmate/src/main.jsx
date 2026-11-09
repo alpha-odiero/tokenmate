@@ -57,6 +57,8 @@ const isStandaloneMode = () => {
   const iosStandalone = window.navigator.standalone === true;
   return Boolean(displayMode || iosStandalone);
 };
+const APK_URL = '/downloads/TokenMate.apk';
+const isAndroidDevice = () => typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
 
 function App() {
   const [page, setPage] = useState('dashboard');
@@ -181,9 +183,8 @@ function App() {
 
   const enterApp = () => { sessionStorage.setItem('tokenmate-entered', '1'); setLanding(false); setPage('dashboard'); };
   const applyUpdate = () => { if (updateServiceWorker) updateServiceWorker(true); };
-  const installApp = async () => {
-    if (installed && !installPrompt) { enterApp(); return; }
-    if (!installPrompt) { setShowInstallHelp(true); return; }
+  const runInstallPrompt = async () => {
+    if (!installPrompt) return;
     try {
       const promptEvent = installPrompt;
       setInstallPrompt(null);
@@ -198,8 +199,13 @@ function App() {
       setShowInstallHelp(true);
     }
   };
+  const installApp = async () => {
+    if (installed && !installPrompt) { enterApp(); return; }
+    if (!installPrompt || isAndroidDevice()) { setShowInstallHelp(true); return; }
+    await runInstallPrompt();
+  };
 
-  if (landing) return <><Landing onEnter={enterApp} onInstall={installApp} installAvailable={!!installPrompt} installed={installed} />{showInstallHelp && <InstallHelpModal installed={installed} onClose={() => setShowInstallHelp(false)} />}{updateReady && <UpdateBanner onUpdate={applyUpdate} onDismiss={() => setUpdateReady(false)} />}{toast && <div className="toast"><CheckCircleIcon/>{toast}</div>}</>;
+  if (landing) return <><Landing onEnter={enterApp} onInstall={installApp} installAvailable={!!installPrompt} installed={installed} />{showInstallHelp && <InstallHelpModal installed={installed} installAvailable={!!installPrompt} onNativeInstall={runInstallPrompt} onClose={() => setShowInstallHelp(false)} />}{updateReady && <UpdateBanner onUpdate={applyUpdate} onDismiss={() => setUpdateReady(false)} />}{toast && <div className="toast"><CheckCircleIcon/>{toast}</div>}</>;
   if (loading) return <><div className="loading-screen"><div className="loader-logo"><Zap size={30}/></div><div className="loading-line"/><p>Getting your power records ready</p></div>{updateReady && <UpdateBanner onUpdate={applyUpdate} onDismiss={() => setUpdateReady(false)} />}</>;
 
   const nav = [
@@ -259,7 +265,7 @@ function Landing({onEnter,onInstall,installAvailable,installed}){
 }
 function Feature({icon:Icon,number,title,desc}){return <article className="feature-card"><div className="feature-top"><span className="feature-icon"><Icon size={21}/></span><span>{number}</span></div><h3>{title}</h3><p>{desc}</p></article>}
 
-function InstallHelpModal({installed,onClose}){
+function InstallHelpModal({installed,installAvailable,onNativeInstall,onClose}){
   const ua=navigator.userAgent||'';
   const isIPadOS=navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1;
   const isIOS=/iphone|ipad|ipod/i.test(ua)||isIPadOS;
@@ -280,7 +286,7 @@ function InstallHelpModal({installed,onClose}){
     'Choose “Install TokenMate” or “Install page as app”.',
     'Confirm the installation.'
   ];
-  return <Modal title="Install TokenMate" subtitle="Add TokenMate to your home screen for the full app experience." onClose={onClose}><div className="modal-form">{installed?<div className="install-help-status"><CheckCircleIcon/><p>TokenMate is already installed on this device. Open it from your home screen or app list.</p></div>:<ol className="install-steps">{steps.map((step,i)=><li key={i}><span>{i+1}</span><p>{step}</p></li>)}</ol>}<div className="receive-tip"><ShieldCheck size={18}/><span>Installation requires HTTPS in production. After installing, TokenMate opens without browser bars and keeps working offline.</span></div><button className="button button-primary full-button" onClick={onClose}>Got it</button></div></Modal>;
+  return <Modal title="Install TokenMate" subtitle="Add TokenMate to your home screen for the full app experience." onClose={onClose}><div className="modal-form">{installed?<div className="install-help-status"><CheckCircleIcon/><p>TokenMate is already installed on this device. Open it from your home screen or app list.</p></div>:<><ol className="install-steps">{steps.map((step,i)=><li key={i}><span>{i+1}</span><p>{step}</p></li>)}</ol>{isAndroid&&<div className="install-apk"><a className="button button-primary full-button" href={APK_URL} download="TokenMate.apk"><Download size={16}/> Download Android app (APK)</a>{installAvailable&&<button className="button button-outline full-button" onClick={onNativeInstall}><Smartphone size={16}/> Install from browser instead</button>}<p>After downloading, open the APK and allow installs from this browser when Android asks.</p></div>}</>}<div className="receive-tip"><ShieldCheck size={18}/><span>Installation requires HTTPS in production. After installing, TokenMate opens without browser bars and keeps working offline.</span></div><button className="button button-primary full-button" onClick={onClose}>Got it</button></div></Modal>;
 }
 
 function Dashboard({settings,totals,tokenStats,smsAccess,payments,onAdd,onPage,onReceive}){

@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.vercel.tokenmate.twa",
+        "sha256_cert_fingerprints": ["F7:B6:1B:9D:7F:2D:1E:78:87:6C:59:C2:D6:C3:A1:DA:4F:72:6B:C0:6D:0C:58:E4:EE:DE:C4:BA:D6:9D:D3:FC"]
+      }
+    }]

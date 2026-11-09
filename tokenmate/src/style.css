@@ -71,6 +71,8 @@
 .install-steps li p{margin:0;font-size:11px;line-height:1.55;color:#5e6d82}
 .install-help-status{display:flex;align-items:center;gap:10px;background:#eef8f2;border:1px solid #d7ecdf;border-radius:9px;padding:12px;color:#16815f;font-size:11px;line-height:1.5}
 .install-help-status p{margin:0}
+.install-apk{display:grid;gap:8px;padding-top:2px}
+.install-apk p{margin:0;font-size:10px;line-height:1.5;color:#8795a7;text-align:center}
 /* Installed app mode */
 .app-shell.installed-app .bottom-nav{display:none}
 @media(max-width:760px){
