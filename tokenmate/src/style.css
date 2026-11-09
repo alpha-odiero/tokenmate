@@ -84,3 +84,30 @@
 .brand-mark img{width:100%;height:100%;object-fit:cover;display:block}
 .banner-logo{width:112px;max-width:100%;height:auto;display:block}
 @media(max-width:760px){.banner-logo{width:92px}}
+
+/* Expanding, fading wave rings around the TokenMate logo; the logo stays still. */
+.banner-circle{position:relative}
+.banner-logo{position:relative;z-index:3}
+.banner-wave{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;z-index:2}
+.banner-ring{
+  position:absolute;top:50%;left:50%;width:100%;height:100%;
+  border:2px solid;border-radius:50%;pointer-events:none;
+  transform:translate(-50%,-50%) scale(0);opacity:0;
+  animation:banner-wave var(--wave-duration,6s) ease-out infinite;
+  will-change:transform,opacity;
+}
+.banner-ring.wave-1{border-color:rgba(11,79,168,.85);--wave-delay:0s;box-shadow:0 0 18px rgba(11,79,168,.45)}
+.banner-ring.wave-2{border-color:rgba(11,79,168,.6);--wave-delay:1.5s;box-shadow:0 0 14px rgba(11,79,168,.3)}
+.banner-ring.wave-3{border-color:rgba(11,79,168,.4);--wave-delay:3s;box-shadow:0 0 10px rgba(11,79,168,.2)}
+.banner-ring.wave-4{border-color:rgba(11,79,168,.22);--wave-delay:4.5s;box-shadow:0 0 6px rgba(11,79,168,.15)}
+.banner-ring{animation-delay:var(--wave-delay)}
+@keyframes banner-wave{
+  0%{transform:translate(-50%,-50%) scale(0);opacity:0}
+  20%{opacity:.7}
+  100%{transform:translate(-50%,-50%) scale(2);opacity:0}
+}
+@media(prefers-reduced-motion:reduce){
+  .banner-ring{animation:none;transform:translate(-50%,-50%) scale(1);opacity:0.45}
+  .banner-ring.wave-1{box-shadow:none}
+}
+@media(max-width:760px){.banner-ring{--wave-duration:5.5s}}
