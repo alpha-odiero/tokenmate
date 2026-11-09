@@ -81,6 +81,24 @@ function extractUnits(text) {
   return '';
 }
 
+function extractRemainingUnits(text) {
+  const patterns = [
+    /\b(?:remaining|balance|left|available|outstanding)\s+(?:units?|kwh)\s*[:=]?\s*([\d,]+(?:\.\d{1,2})?)\b/gi,
+    /\b(?:units?|kwh)\s*(?:remaining|balance|left|available)\s*[:=]?\s*([\d,]+(?:\.\d{1,2})?)\b/gi,
+    /\bremaining\s+(?:of\s+)?([\d,]+(?:\.\d{1,2})?)\s*(?:units?|kwh)\b/gi,
+    /\b([\d,]+(?:\.\d{1,2})?)\s*(?:units?|kwh)\s+remaining\b/gi,
+    /\b([\d,]+(?:\.\d{1,2})?)\s*(?:units?|kwh)\s+balance\b/gi,
+    /\b([\d,]+(?:\.\d{1,2})?)\s*(?:units?|kwh)\s+left\b/gi,
+  ];
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      const n = toPositiveNumber(match[1]);
+      if (n !== '' && n <= 100000) return n;
+    }
+  }
+  return '';
+}
+
 function normalizeYear(value) {
   const year = Number(value);
   return year < 100 ? 2000 + year : year;
@@ -204,12 +222,13 @@ function extractTransactionRef(text, token) {
 
 export function parseTokenMessage(input) {
   const text = cleanText(input);
-  if (!text) return { tokenNumber: '', amount: '', units: '', paidAt: '', hasTime: false, sender: '', transactionRef: '' };
+  if (!text) return { tokenNumber: '', amount: '', units: '', remainingUnits: '', paidAt: '', hasTime: false, sender: '', transactionRef: '' };
   const tokenNumber = extractToken(text);
   const amount = extractAmount(text, tokenNumber);
   const units = extractUnits(text);
+  const remainingUnits = extractRemainingUnits(text);
   const { paidAt, hasTime } = extractDateTime(text);
   const sender = extractSender(text);
   const transactionRef = extractTransactionRef(text, tokenNumber);
-  return { tokenNumber, amount, units, paidAt, hasTime, sender, transactionRef };
+  return { tokenNumber, amount, units, remainingUnits, paidAt, hasTime, sender, transactionRef };
 }

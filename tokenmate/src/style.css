@@ -85,6 +85,40 @@
 .banner-logo{width:112px;max-width:100%;height:auto;display:block}
 @media(max-width:760px){.banner-logo{width:92px}}
 
+/* Apartment power forecast */
+.power-forecast{margin:0 0 20px}
+.forecast-status{padding:6px 10px;border-radius:20px;font-size:9px;font-weight:800;white-space:nowrap}
+.forecast-status.healthy{background:#e8f7f0;color:#16815f}
+.forecast-status.low{background:#fff7d9;color:#9b6b00}
+.forecast-status.critical{background:#fff0ee;color:#bd4033}
+.forecast-status.unknown{background:#eef2f8;color:#68788f}
+.forecast-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.forecast-metrics>div{display:grid;gap:5px;border-top:1px solid var(--line);padding-top:12px;min-width:0}
+.forecast-metrics span{font-size:9px;color:#7e8ba0;font-weight:600}
+.forecast-metrics b{font:800 17px Manrope;letter-spacing:-.3px;color:#1b2d47;overflow-wrap:anywhere}
+.forecast-metrics small{font-size:8px;line-height:1.5;color:#97a3b3}
+.forecast-explanation{margin:15px 0 0;padding:11px 12px;border-radius:9px;background:#f4f8fd;color:#5d6c80;font-size:10px;line-height:1.6}
+.reading-entry{margin-top:13px;border-top:1px solid var(--line);padding-top:12px}
+.reading-entry summary{display:flex;align-items:center;gap:6px;color:var(--blue);font-size:10px;font-weight:700;cursor:pointer;list-style:none}
+.reading-entry summary::-webkit-details-marker{display:none}
+.reading-entry form{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;padding-top:12px}
+.reading-entry form label{display:grid;gap:5px;flex:1 1 160px;color:#718096;font-size:9px;font-weight:600}
+.reading-entry form input{width:100%;min-height:36px;border:1px solid #dfe6ef;border-radius:8px;padding:8px 10px;color:var(--ink);font-size:11px}
+.reading-entry .form-error{flex-basis:100%}
+.forecast-alerts{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.forecast-alerts>div{display:grid;gap:4px}
+.forecast-alerts b,.notification-history>b{font-size:10px;color:#283b55}
+.forecast-alerts small{max-width:620px;font-size:8px;line-height:1.5;color:#8795a7}
+.forecast-alerts button{flex:none}
+.alert-toggle,.threshold-options label{display:flex;align-items:center;gap:6px;color:#526278;font-size:9px;font-weight:700}
+.threshold-options{display:flex;gap:15px;justify-content:flex-end;margin-top:10px}
+.notification-history{display:grid;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.notification-history>div{display:flex;align-items:center;justify-content:space-between;gap:10px;color:#526278;font-size:9px}
+.notification-history small{color:#8e9bad;font-size:8px}
+.field-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media(max-width:760px){.forecast-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){.forecast-alerts{align-items:flex-start;flex-direction:column}.threshold-options{justify-content:flex-start}.field-row{grid-template-columns:1fr}}
+
 /* Expanding, fading wave rings around the TokenMate logo; the logo stays still. */
 .banner-circle{position:relative}
 .banner-logo{position:relative;z-index:3}
@@ -111,3 +145,50 @@
   .banner-ring.wave-1{box-shadow:none}
 }
 @media(max-width:760px){.banner-ring{--wave-duration:5.5s}}
+
+/* Receipt preview, PDF capture, and print layout */
+.receipt-backdrop{position:fixed;inset:0;z-index:140;display:grid;place-items:center;padding:18px;background:rgba(13,27,46,.58)}
+.receipt-dialog{display:flex;flex-direction:column;width:min(760px,100%);max-height:min(94vh,920px);overflow:hidden;border-radius:16px;background:#f4f7fc;box-shadow:0 24px 70px rgba(8,24,46,.28)}
+.receipt-dialog-header{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:15px 20px;background:#fff;border-bottom:1px solid var(--line)}
+.receipt-dialog-header h2{margin:0;color:var(--ink);font:800 16px Manrope}
+.receipt-dialog-header p{margin:4px 0 0;color:#8795a7;font-size:9px}
+.receipt-scroll-area{overflow:auto;padding:18px}
+.receipt-paper{width:min(100%,520px);margin:0 auto;padding:30px 34px 22px;background:#fff;color:#14233b;border:1px solid #e8edf4;border-radius:12px;box-shadow:0 8px 28px rgba(24,49,86,.07)}
+.receipt-brand{display:flex;align-items:center;gap:11px;padding-bottom:18px;border-bottom:1px solid #e8edf4}
+.receipt-brand img{width:42px;height:42px;object-fit:contain}
+.receipt-brand>div{display:grid;gap:4px;flex:1}
+.receipt-brand>div b{font:800 15px Manrope;letter-spacing:.3px;color:var(--blue)}
+.receipt-brand>div span{font-size:8px;font-weight:800;letter-spacing:1.3px;color:#8492a5}
+.receipt-paid{padding:6px 9px;border-radius:20px;background:#e8f7f0;color:#16815f;font-size:8px;font-weight:800;letter-spacing:.5px}
+.receipt-greeting{padding:20px 0 16px}
+.receipt-greeting h3{margin:0 0 6px;font:800 18px Manrope;color:#1a2e49}
+.receipt-greeting p{margin:0;color:#748297;font-size:10px}
+.receipt-total{display:grid;gap:7px;padding:17px 18px;border-radius:10px;background:linear-gradient(112deg,#0b4fa8,#0a438e);color:white}
+.receipt-total span{font-size:8px;font-weight:800;letter-spacing:1.2px;color:#d6e5fa}
+.receipt-total strong{font:800 25px Manrope;letter-spacing:-.5px;color:#fff}
+.receipt-details{padding:20px 0 13px}
+.receipt-details h4{margin:0 0 7px;color:#8492a5;font-size:8px;letter-spacing:1.2px}
+.receipt-details>div{display:flex;justify-content:space-between;gap:14px;padding:8px 0;border-bottom:1px solid #edf0f5;font-size:9px}
+.receipt-details>div span{color:#7d899b}
+.receipt-details>div b{max-width:62%;color:#263a54;text-align:right;overflow-wrap:anywhere}
+.receipt-details .receipt-paid-label{color:#16815f}
+.receipt-note{padding:10px 11px;border-radius:7px;background:#f5f8fc;color:#7b899b;font-size:8px;line-height:1.5}
+.receipt-footer{display:grid;justify-items:center;padding-top:16px;text-align:center}
+.receipt-footer>span{width:100%;height:2px;margin-bottom:12px;background:linear-gradient(90deg,transparent,#ffd43b,#0b4fa8,transparent)}
+.receipt-footer b{font:800 10px Manrope;letter-spacing:1px;color:var(--blue)}
+.receipt-footer p{margin:4px 0;color:#65758a;font-size:9px}
+.receipt-footer small{color:#9aa6b5;font-size:8px}
+.receipt-actions{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;background:#fff;border-top:1px solid var(--line)}
+.receipt-error{margin:0;padding:0 18px 12px;background:#fff;color:#bd4033;font-size:10px}
+@media(max-width:560px){.receipt-backdrop{padding:0;align-items:stretch}.receipt-dialog{width:100%;height:100%;max-height:100vh;border-radius:0}.receipt-scroll-area{padding:12px}.receipt-paper{padding:22px 18px 18px}.receipt-actions{display:grid;grid-template-columns:1fr 1fr}.receipt-actions .button-primary{grid-column:1/-1}.receipt-dialog-header{padding:calc(12px + env(safe-area-inset-top)) 15px 12px}}
+@media print{
+  @page{size:A4;margin:14mm}
+  html,body,#root{width:100%;min-height:0!important;margin:0!important;background:#fff!important}
+  body *{visibility:hidden!important}
+  .receipt-backdrop,.receipt-backdrop *{visibility:visible!important}
+  .receipt-backdrop{position:absolute!important;inset:0!important;display:block!important;padding:0!important;background:#fff!important}
+  .receipt-dialog{width:100%!important;max-height:none!important;overflow:visible!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:#fff!important}
+  .receipt-dialog-header,.receipt-actions,.receipt-error{display:none!important}
+  .receipt-scroll-area{overflow:visible!important;padding:0!important}
+  .receipt-paper{width:100%!important;max-width:175mm!important;margin:0 auto!important;border:0!important;border-radius:0!important;box-shadow:none!important;break-inside:avoid;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+}
