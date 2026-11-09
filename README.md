@@ -79,3 +79,9 @@ The same flow works in either direction and with any number of apartment mates.
 3. Add CSV export and transaction edit/audit history.
 4. Add Android share-target integration or a native Android companion if direct SMS import is essential.
 5. Add end-to-end automated tests for payment parsing, import validation and acknowledgement state transitions.
+
+## Forking
+
+You can fork this project on GitHub to create your own copy and customize it for your needs.
+
+Alpha Odiero — happy coding
