@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import Dexie from 'dexie';
 import { registerSW } from 'virtual:pwa-register';
@@ -8,6 +8,7 @@ import {
   Home, Info, Menu, MessageCircle, Minus, Plus, QrCode, ReceiptText, Send, Settings, ShieldCheck,
   Smartphone, Sparkles, Trash2, TrendingDown, TrendingUp, Upload, Wallet, X, Zap
 } from 'lucide-react';
+import tokenMateLogo from './assets/TokenMate.png';
 import './style.css';
 
 const db = new Dexie('tokenmate-local-v1');
@@ -49,6 +50,14 @@ function parseKplcSms(text) {
   return { amount: Number.isFinite(amount) ? amount : '', tokenNumber: token, paidAt, units: Number.isFinite(units) ? units : '' };
 }
 
+const standaloneModes = ['standalone', 'fullscreen', 'minimal-ui'];
+const isStandaloneMode = () => {
+  if (typeof window === 'undefined') return false;
+  const displayMode = standaloneModes.some(mode => window.matchMedia?.(`(display-mode: ${mode})`).matches);
+  const iosStandalone = window.navigator.standalone === true;
+  return Boolean(displayMode || iosStandalone);
+};
+
 function App() {
   const [page, setPage] = useState('dashboard');
   const [payments, setPayments] = useState([]);
@@ -58,10 +67,14 @@ function App() {
   const [showReceive, setShowReceive] = useState(false);
   const [toast, setToast] = useState('');
   const [installPrompt, setInstallPrompt] = useState(null);
+  const [installed, setInstalled] = useState(isStandaloneMode);
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [filter, setFilter] = useState('All');
-  const [landing, setLanding] = useState(!window.matchMedia('(display-mode: standalone)').matches && !sessionStorage.getItem('tokenmate-entered'));
+  const [landing, setLanding] = useState(() => !isStandaloneMode() && !sessionStorage.getItem('tokenmate-entered'));
   const [mobileMenu, setMobileMenu] = useState(false);
   const [updateReady, setUpdateReady] = useState(false);
+  const menuButtonRef = useRef(null);
+  const menuPanelRef = useRef(null);
 
   useEffect(() => {
     let alive = true;
@@ -79,9 +92,7 @@ function App() {
       setSettings(next);
       setLoading(false);
     }).catch(() => setLoading(false));
-    const handler = e => { e.preventDefault(); setInstallPrompt(e); };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => { alive = false; window.removeEventListener('beforeinstallprompt', handler); };
+    return () => { alive = false; };
   }, []);
 
   useEffect(() => {
@@ -89,12 +100,45 @@ function App() {
   }, []);
 
   useEffect(() => {
+    const onBeforeInstall = e => { e.preventDefault(); setInstallPrompt(e); };
+    const onInstalled = () => {
+      setInstalled(true);
+      setInstallPrompt(null);
+      setToast('TokenMate is installed. Open it from your home screen.');
+      window.setTimeout(() => setToast(''), 4000);
+    };
+    const onDisplayChange = () => setInstalled(isStandaloneMode());
+    const displayModes = standaloneModes.map(mode => window.matchMedia(`(display-mode: ${mode})`));
+    window.addEventListener('beforeinstallprompt', onBeforeInstall);
+    window.addEventListener('appinstalled', onInstalled);
+    displayModes.forEach(mql => {
+      if (mql.addEventListener) mql.addEventListener('change', onDisplayChange);
+      else if (mql.addListener) mql.addListener(onDisplayChange);
+    });
+    if (navigator.getInstalledRelatedApps) {
+      navigator.getInstalledRelatedApps().then(apps => { if (apps.length) setInstalled(true); }).catch(() => {});
+    }
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onBeforeInstall);
+      window.removeEventListener('appinstalled', onInstalled);
+      displayModes.forEach(mql => {
+        if (mql.removeEventListener) mql.removeEventListener('change', onDisplayChange);
+        else if (mql.removeListener) mql.removeListener(onDisplayChange);
+      });
+    };
+  }, []);
+
+  useEffect(() => {
     if (!mobileMenu) return;
     const onKey = e => { if (e.key === 'Escape') setMobileMenu(false); };
-    const onOutside = e => { if (!e.target.closest('.mobile-nav') && !e.target.closest('.mobile-menu')) setMobileMenu(false); };
+    const onOutside = e => {
+      if (menuButtonRef.current?.contains(e.target)) return;
+      if (menuPanelRef.current?.contains(e.target)) return;
+      setMobileMenu(false);
+    };
     document.addEventListener('keydown', onKey);
-    document.addEventListener('click', onOutside);
-    return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('click', onOutside); };
+    document.addEventListener('pointerdown', onOutside);
+    return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('pointerdown', onOutside); };
   }, [mobileMenu]);
 
   const notify = message => { setToast(message); window.setTimeout(() => setToast(''), 3000); };
@@ -138,16 +182,24 @@ function App() {
   const enterApp = () => { sessionStorage.setItem('tokenmate-entered', '1'); setLanding(false); setPage('dashboard'); };
   const applyUpdate = () => { if (updateServiceWorker) updateServiceWorker(true); };
   const installApp = async () => {
-    if (!installPrompt) { notify(/iphone|ipad|ipod/i.test(navigator.userAgent) ? 'On iPhone: tap Share, then Add to Home Screen.' : 'Use your browser menu and choose Install app or Add to Home Screen.'); return; }
+    if (installed && !installPrompt) { enterApp(); return; }
+    if (!installPrompt) { setShowInstallHelp(true); return; }
     try {
-      const result = await installPrompt.prompt();
+      const promptEvent = installPrompt;
       setInstallPrompt(null);
+      await promptEvent.prompt();
+      const choice = await promptEvent.userChoice;
+      if (choice.outcome === 'accepted') {
+        notify('Installing TokenMate…');
+      } else {
+        notify('Installation dismissed. You can install later from your browser menu.');
+      }
     } catch (e) {
-      setInstallPrompt(null);
+      setShowInstallHelp(true);
     }
   };
 
-  if (landing) return <><Landing onEnter={enterApp} onInstall={installApp} installAvailable={!!installPrompt} />{updateReady && <UpdateBanner onUpdate={applyUpdate} onDismiss={() => setUpdateReady(false)} />}{toast && <div className="toast"><CheckCircleIcon/>{toast}</div>}</>;
+  if (landing) return <><Landing onEnter={enterApp} onInstall={installApp} installAvailable={!!installPrompt} installed={installed} />{showInstallHelp && <InstallHelpModal installed={installed} onClose={() => setShowInstallHelp(false)} />}{updateReady && <UpdateBanner onUpdate={applyUpdate} onDismiss={() => setUpdateReady(false)} />}{toast && <div className="toast"><CheckCircleIcon/>{toast}</div>}</>;
   if (loading) return <><div className="loading-screen"><div className="loader-logo"><Zap size={30}/></div><div className="loading-line"/><p>Getting your power records ready</p></div>{updateReady && <UpdateBanner onUpdate={applyUpdate} onDismiss={() => setUpdateReady(false)} />}</>;
 
   const nav = [
@@ -156,7 +208,7 @@ function App() {
   ];
   const visiblePayments = payments.filter(p => filter === 'All' || p.payer === filter);
 
-  return <div className="app-shell">
+  return <div className={installed ? 'app-shell installed-app' : 'app-shell'}>
     <aside className="sidebar">
       <Brand onClick={() => setPage('dashboard')} />
       <div className="workspace-label">WORKSPACE</div>
@@ -164,8 +216,8 @@ function App() {
       <div className="sidebar-bottom"><button className="profile-mini" onClick={() => setPage('settings')}><div className="avatar">{(settings.myName||'Y').slice(0,1).toUpperCase()}</div><span><b>{settings.myName}</b><small>Apartment member</small></span><ChevronDown size={15}/></button></div>
     </aside>
     <main className="main-area">
-      <header className="topbar"><button className="mobile-brand" onClick={() => setPage('dashboard')}><BrandMark/><b>TokenMate</b></button><div className="breadcrumb">Workspace <ChevronRight size={14}/> <b>{nav.find(n=>n.id===page)?.label || 'Overview'}</b></div><div className="top-actions"><button className="icon-button" title="Help" onClick={() => setPage('about')}><CircleHelp size={19}/></button><button className="avatar top-avatar" onClick={() => setPage('settings')}>{(settings.myName||'Y').slice(0,1).toUpperCase()}</button><button className="mobile-menu" type="button" aria-label={mobileMenu?'Close menu':'Open menu'} aria-expanded={mobileMenu} onClick={() => setMobileMenu(!mobileMenu)}>{mobileMenu?<X size={20}/>:<Menu size={20}/>}</button></div></header>
-      {mobileMenu && <div className="mobile-nav">{nav.map(item=><button key={item.id} type="button" className={page===item.id?'active':''} onClick={()=>{setPage(item.id);setMobileMenu(false)}}><item.icon size={18}/>{item.label}</button>)}</div>}
+      <header className="topbar"><button className="mobile-brand" onClick={() => setPage('dashboard')}><BrandMark/><b>TokenMate</b></button><div className="breadcrumb">Workspace <ChevronRight size={14}/> <b>{nav.find(n=>n.id===page)?.label || 'Overview'}</b></div><div className="top-actions"><button className="icon-button" title="Help" onClick={() => setPage('about')}><CircleHelp size={19}/></button><button className="avatar top-avatar" onClick={() => setPage('settings')}>{(settings.myName||'Y').slice(0,1).toUpperCase()}</button><button ref={menuButtonRef} className="mobile-menu" type="button" aria-label={mobileMenu?'Close menu':'Open menu'} aria-controls="app-mobile-nav" aria-expanded={mobileMenu} onClick={() => setMobileMenu(v=>!v)}>{mobileMenu?<X size={20}/>:<Menu size={20}/>}</button></div></header>
+      {mobileMenu && <div className="mobile-nav" id="app-mobile-nav" ref={menuPanelRef}>{nav.map(item=><button key={item.id} type="button" className={page===item.id?'active':''} onClick={()=>{setPage(item.id);setMobileMenu(false)}}><item.icon size={18}/>{item.label}</button>)}</div>}
       <div className="page-content">
         {page==='dashboard' && <Dashboard settings={settings} totals={totals} tokenStats={tokenStats} payments={payments} onAdd={()=>setShowAdd(true)} onPage={setPage} onReceive={()=>setShowReceive(true)} />}
         {page==='payments' && <PaymentsPage payments={visiblePayments} filter={filter} setFilter={setFilter} people={settings.members} onAdd={()=>setShowAdd(true)} onDelete={async p=>{if(p.acknowledgementStatus!=='acknowledged'){notify('This payment is locked until it is acknowledged.');return;} if(confirm('Delete this acknowledged payment?')){await db.payments.delete(p.id);setPayments(rows=>rows.filter(x=>x.id!==p.id));notify('Payment deleted.');}}} onShare={p=>sharePayment(p,notify)} />}
@@ -182,10 +234,10 @@ function App() {
 }
 
 function CheckCircleIcon(){return <span className="toast-check"><Check size={14}/></span>}
-function BrandMark(){return <span className="brand-mark"><Zap size={20} fill="currentColor"/></span>}
+function BrandMark(){return <span className="brand-mark"><img src="/icon-192.png" alt="" /></span>}
 function Brand({onClick}){return <button className="brand" onClick={onClick}><BrandMark/><span><b>TokenMate</b><small>POWER, ACCOUNTED FOR.</small></span></button>}
 
-function Landing({onEnter,onInstall,installAvailable}){
+function Landing({onEnter,onInstall,installAvailable,installed}){
   const [menuOpen,setMenuOpen]=useState(false);
   useEffect(() => {
     if (!menuOpen) return;
@@ -195,8 +247,8 @@ function Landing({onEnter,onInstall,installAvailable}){
     document.addEventListener('click', onOutside);
     return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('click', onOutside); };
   }, [menuOpen]);
-  return <div className="landing"><header className="landing-header"><Brand onClick={()=>window.scrollTo({top:0,behavior:'smooth'})}/><nav className={menuOpen?'open':''}><a href="#how" onClick={()=>setMenuOpen(false)}>How it works</a><a href="#faqs" onClick={()=>setMenuOpen(false)}>FAQs</a></nav><div className="landing-header-actions"><button className="landing-menu" type="button" aria-label={menuOpen?'Close menu':'Open menu'} aria-expanded={menuOpen} onClick={()=>setMenuOpen(!menuOpen)}>{menuOpen?<X size={19}/>:<Menu size={19}/>}</button><button className="button button-primary install-top" onClick={onInstall}><Smartphone size={17}/> {installAvailable?'Install app':'Get the app'}</button></div></header>
-    <section className="hero"><div className="hero-copy"><div className="eyebrow"><span className="eyebrow-dot"/> MADE FOR SHARED HOMES</div><h1>Every token.<br/><em>Every contribution.</em><br/>All accounted for.</h1><p className="hero-desc">A simple, private way for apartment mates to track shared KPLC token payments, keep the original SMS evidence, and stay on the same page.</p><div className="hero-buttons"><button className="button button-primary button-large" onClick={onEnter}>Open TokenMate <ArrowUpRight size={18}/></button><button className="button button-light button-large" onClick={onInstall}><Download size={17}/> Install app</button></div><div className="hero-trust"><span><Zap size={15}/> Works offline</span><span><CheckCheck size={15}/> Shared payment records</span></div></div>
+  return <div className="landing"><header className="landing-header"><Brand onClick={()=>window.scrollTo({top:0,behavior:'smooth'})}/><nav className={menuOpen?'open':''}><a href="#how" onClick={()=>setMenuOpen(false)}>How it works</a><a href="#faqs" onClick={()=>setMenuOpen(false)}>FAQs</a></nav><div className="landing-header-actions"><button className="landing-menu" type="button" aria-label={menuOpen?'Close menu':'Open menu'} aria-expanded={menuOpen} onClick={()=>setMenuOpen(!menuOpen)}>{menuOpen?<X size={19}/>:<Menu size={19}/>}</button><button className="button button-primary install-top" onClick={onInstall}><Smartphone size={17}/> {installed?'Open app':installAvailable?'Install app':'Get the app'}</button></div></header>
+    <section className="hero"><div className="hero-copy"><div className="eyebrow"><span className="eyebrow-dot"/> MADE FOR SHARED HOMES</div><h1>Every token.<br/><em>Every contribution.</em><br/>All accounted for.</h1><p className="hero-desc">A simple, private way for apartment mates to track shared KPLC token payments, keep the original SMS evidence, and stay on the same page.</p><div className="hero-buttons"><button className="button button-primary button-large" onClick={onEnter}>Open TokenMate <ArrowUpRight size={18}/></button><button className="button button-light button-large" onClick={onInstall}><Download size={17}/> {installed?'Open app':installAvailable?'Install app':'Get the app'}</button></div><div className="hero-trust"><span><Zap size={15}/> Works offline</span><span><CheckCheck size={15}/> Shared payment records</span></div></div>
       <div className="hero-visual"><div className="visual-glow"/><div className="receipt-card"><div className="receipt-top"><span className="receipt-icon"><Zap size={18}/></span><span className="receipt-label">TOKEN PAYMENT</span><span className="receipt-status">SAVED</span></div><div className="receipt-amount">KSh 500<span>.00</span></div><div className="receipt-caption">Electricity token purchase</div><div className="receipt-divider"/><div className="receipt-row"><span>Paid by</span><b>Alex M.</b></div><div className="receipt-row"><span>Date & time</span><b>Today, 10:42 AM</b></div><div className="receipt-row"><span>Token number</span><b>•••• •••• •••• 4821</b></div><div className="receipt-divider"/><div className="receipt-confirm"><CheckCheck size={17}/> Shared payment evidence</div></div><div className="float-chip chip-one"><span className="chip-avatar blue">A</span><span><b>Alex paid</b><small>KSh 500</small></span><Check size={17}/></div><div className="float-chip chip-two"><span className="chip-icon"><MessageCircle size={17}/></span><span><b>Payment acknowledged</b><small>Both people are in sync</small></span></div><div className="hero-dots"/></div>
     </section>
     <section className="landing-stats"><div><strong>01</strong><span>One shared record</span></div><div><strong>02</strong><span>Everyone, clear totals</span></div><div><strong>24/7</strong><span>Available offline</span></div></section>
@@ -207,12 +259,36 @@ function Landing({onEnter,onInstall,installAvailable}){
 }
 function Feature({icon:Icon,number,title,desc}){return <article className="feature-card"><div className="feature-top"><span className="feature-icon"><Icon size={21}/></span><span>{number}</span></div><h3>{title}</h3><p>{desc}</p></article>}
 
+function InstallHelpModal({installed,onClose}){
+  const ua=navigator.userAgent||'';
+  const isIPadOS=navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1;
+  const isIOS=/iphone|ipad|ipod/i.test(ua)||isIPadOS;
+  const isAndroid=/android/i.test(ua);
+  const steps=isIOS?[
+    'Open TokenMate in Safari. Installation does not work from in-app browsers.',
+    'Tap the Share button in the browser toolbar.',
+    'Scroll down and tap “Add to Home Screen”.',
+    'Tap “Add” in the top-right corner.'
+  ]:isAndroid?[
+    'Open TokenMate in Chrome.',
+    'Tap the three-dot menu in the top-right corner.',
+    'Tap “Install app” or “Add to Home screen”.',
+    'Confirm by tapping “Install” or “Add”.'
+  ]:[
+    'Open TokenMate in Chrome or Edge.',
+    'Click the install icon in the address bar, or open the browser menu.',
+    'Choose “Install TokenMate” or “Install page as app”.',
+    'Confirm the installation.'
+  ];
+  return <Modal title="Install TokenMate" subtitle="Add TokenMate to your home screen for the full app experience." onClose={onClose}><div className="modal-form">{installed?<div className="install-help-status"><CheckCircleIcon/><p>TokenMate is already installed on this device. Open it from your home screen or app list.</p></div>:<ol className="install-steps">{steps.map((step,i)=><li key={i}><span>{i+1}</span><p>{step}</p></li>)}</ol>}<div className="receive-tip"><ShieldCheck size={18}/><span>Installation requires HTTPS in production. After installing, TokenMate opens without browser bars and keeps working offline.</span></div><button className="button button-primary full-button" onClick={onClose}>Got it</button></div></Modal>;
+}
+
 function Dashboard({settings,totals,tokenStats,smsAccess,payments,onAdd,onPage,onReceive}){
   const recent=payments.slice(0,4);const pending=payments.filter(p=>p.acknowledgementStatus==='pending').length;
   const TrendIcon=tokenStats.trend==='rising'?TrendingUp:tokenStats.trend==='dropping'?TrendingDown:Minus;
   const trendLabel=tokenStats.trend==='rising'?'Rising':tokenStats.trend==='dropping'?'Dropping':'Steady';
   return <><div className="page-heading"><div><div className="eyebrow">YOUR APARTMENT</div><h1>Good to see you, {settings.myName}.</h1><p>Here's how your shared electricity contributions are looking.</p></div><div className="heading-actions"><button className="button button-outline" onClick={onReceive}><ArrowDownToLine size={17}/> Receive payment</button><button className="button button-primary" onClick={onAdd}><Plus size={18}/> Add payment</button></div></div>
-    <div className="welcome-banner"><div className="banner-copy"><span className="banner-kicker"><Sparkles size={14}/> APARTMENT POWER SUMMARY</span><h2>Keep the power on.<br/><span>Keep everything clear.</span></h2><p>Every contribution deserves a clear record.</p></div><div className="banner-art"><div className="banner-circle"><Zap size={58} fill="currentColor"/></div><div className="banner-spark spark-a">✦</div><div className="banner-spark spark-b">✧</div></div></div>
+    <div className="welcome-banner"><div className="banner-copy"><span className="banner-kicker"><Sparkles size={14}/> APARTMENT POWER SUMMARY</span><h2>Keep the power on.<br/><span>Keep everything clear.</span></h2><p>Every contribution deserves a clear record.</p></div><div className="banner-art"><div className="banner-circle"><img className="banner-logo" src={tokenMateLogo} alt="TokenMate" /></div><div className="banner-spark spark-a">✦</div><div className="banner-spark spark-b">✧</div></div></div>
     <div className="stats-grid"><StatCard label="Total contributions" value={money(totals.total)} note={`${totals.count} recorded payment${totals.count===1?'':'s'}`} icon={Wallet} tone="blue"/>{totals.byMember.map((m,i)=><StatCard key={m.name} label={m.name} value={money(m.total)} note="Total paid so far" icon={Activity} tone={['yellow','purple','green','blue'][i%4]}/>)}<StatCard label="Contribution gap" value={money(totals.difference)} note={totals.difference===0?'Everyone is currently even':`${totals.top.name} has paid more`} icon={Zap} tone="green"/></div>
     {smsAccess && <section className="panel token-insights"><div className="panel-heading"><div><h3>Token insights</h3><p>Calculated from your saved KPLC SMS messages</p></div><span className={`trend-pill ${tokenStats.trend}`}><TrendIcon size={14}/> {trendLabel}{tokenStats.count>1?` ${tokenStats.change.toFixed(1)}%`:''}</span></div><div className="insight-metrics"><div><span>Average per purchase</span><b>{tokenStats.count?money(tokenStats.avgAmount):'—'}</b><small>{tokenStats.count} message{tokenStats.count===1?'':'s'} analysed</small></div><div><span>Average token rate</span><b>{tokenStats.avgRate?`${moneyExact(tokenStats.avgRate)}/kWh`:'—'}</b><small>{tokenStats.avgRate?'From imported SMS units':'Add kWh units to your SMS to see the rate'}</small></div><div><span>Trend</span><b className={`trend-text ${tokenStats.trend}`}>{trendLabel}</b><small>{tokenStats.count>1?(tokenStats.trend==='rising'?'Higher than earlier purchases':tokenStats.trend==='dropping'?'Lower than earlier purchases':'In line with earlier purchases'):'Add more messages to compare'}</small></div></div></section>}
     <div className="content-grid"><section className="panel recent-panel"><div className="panel-heading"><div><h3>Recent payments</h3><p>Your latest token contributions</p></div><button className="text-button" onClick={()=>onPage('payments')}>View all <ChevronRight size={16}/></button></div>{recent.length?<div className="payment-list">{recent.map(p=><PaymentRow key={p.id} payment={p}/>)}</div>:<EmptyState icon={ReceiptText} title="No payments yet" text="Add your first KPLC token payment to start your apartment ledger."/>}</section>
