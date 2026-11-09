@@ -77,6 +77,7 @@ function App() {
   const [toast, setToast] = useState('');
   const [installPrompt, setInstallPrompt] = useState(null);
   const [installed, setInstalled] = useState(isStandaloneMode);
+  const [standalone, setStandalone] = useState(isStandaloneMode);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [filter, setFilter] = useState('All');
   const [landing, setLanding] = useState(() => !isStandaloneMode() && !sessionStorage.getItem('tokenmate-entered'));
@@ -116,7 +117,7 @@ function App() {
       setToast('TokenMate is installed. Open it from your home screen.');
       window.setTimeout(() => setToast(''), 4000);
     };
-    const onDisplayChange = () => setInstalled(isStandaloneMode());
+    const onDisplayChange = () => { const next = isStandaloneMode(); setInstalled(next); setStandalone(next); };
     const displayModes = standaloneModes.map(mode => window.matchMedia(`(display-mode: ${mode})`));
     window.addEventListener('beforeinstallprompt', onBeforeInstall);
     window.addEventListener('appinstalled', onInstalled);
@@ -221,7 +222,7 @@ function App() {
   ];
   const visiblePayments = payments.filter(p => filter === 'All' || p.payer === filter);
 
-  return <div className={installed ? 'app-shell installed-app' : 'app-shell'}>
+  return <div className={standalone ? 'app-shell pwa-app' : 'app-shell'}>
     <aside className="sidebar">
       <Brand onClick={() => setPage('dashboard')} />
       <div className="workspace-label">WORKSPACE</div>
