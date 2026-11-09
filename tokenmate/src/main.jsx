@@ -18,6 +18,13 @@ const moneyExact = n => new Intl.NumberFormat('en-KE', { style: 'currency', curr
 const dateLabel = value => new Intl.DateTimeFormat('en-KE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
 const uid = () => crypto.randomUUID?.() || `tm-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const cleanToken = value => String(value || '').replace(/\D/g, '');
+const timeGreeting = (date = new Date()) => {
+  const hour = date.getHours();
+  if (hour >= 5 && hour < 12) return 'Good morning';
+  if (hour >= 12 && hour < 17) return 'Good afternoon';
+  if (hour >= 17 && hour < 21) return 'Good evening';
+  return 'Good night';
+};
 
 let updateServiceWorker = null;
 function setupServiceWorker(onUpdate) {
@@ -293,7 +300,7 @@ function Dashboard({settings,totals,tokenStats,smsAccess,payments,onAdd,onPage,o
   const recent=payments.slice(0,4);const pending=payments.filter(p=>p.acknowledgementStatus==='pending').length;
   const TrendIcon=tokenStats.trend==='rising'?TrendingUp:tokenStats.trend==='dropping'?TrendingDown:Minus;
   const trendLabel=tokenStats.trend==='rising'?'Rising':tokenStats.trend==='dropping'?'Dropping':'Steady';
-  return <><div className="page-heading"><div><div className="eyebrow">YOUR APARTMENT</div><h1>Good to see you, {settings.myName}.</h1><p>Here's how your shared electricity contributions are looking.</p></div><div className="heading-actions"><button className="button button-outline" onClick={onReceive}><ArrowDownToLine size={17}/> Receive payment</button><button className="button button-primary" onClick={onAdd}><Plus size={18}/> Add payment</button></div></div>
+  return <><div className="page-heading"><div><div className="eyebrow">YOUR APARTMENT</div><h1>{timeGreeting()}, {settings.myName}.</h1><p>Here's how your shared electricity contributions are looking.</p></div><div className="heading-actions"><button className="button button-outline" onClick={onReceive}><ArrowDownToLine size={17}/> Receive payment</button><button className="button button-primary" onClick={onAdd}><Plus size={18}/> Add payment</button></div></div>
     <div className="welcome-banner"><div className="banner-copy"><span className="banner-kicker"><Sparkles size={14}/> APARTMENT POWER SUMMARY</span><h2>Keep the power on.<br/><span>Keep everything clear.</span></h2><p>Every contribution deserves a clear record.</p></div><div className="banner-art"><div className="banner-circle"><img className="banner-logo" src={tokenMateLogo} alt="TokenMate" /></div><div className="banner-spark spark-a">✦</div><div className="banner-spark spark-b">✧</div></div></div>
     <div className="stats-grid"><StatCard label="Total contributions" value={money(totals.total)} note={`${totals.count} recorded payment${totals.count===1?'':'s'}`} icon={Wallet} tone="blue"/>{totals.byMember.map((m,i)=><StatCard key={m.name} label={m.name} value={money(m.total)} note="Total paid so far" icon={Activity} tone={['yellow','purple','green','blue'][i%4]}/>)}<StatCard label="Contribution gap" value={money(totals.difference)} note={totals.difference===0?'Everyone is currently even':`${totals.top.name} has paid more`} icon={Zap} tone="green"/></div>
     {smsAccess && <section className="panel token-insights"><div className="panel-heading"><div><h3>Token insights</h3><p>Calculated from your saved KPLC SMS messages</p></div><span className={`trend-pill ${tokenStats.trend}`}><TrendIcon size={14}/> {trendLabel}{tokenStats.count>1?` ${tokenStats.change.toFixed(1)}%`:''}</span></div><div className="insight-metrics"><div><span>Average per purchase</span><b>{tokenStats.count?money(tokenStats.avgAmount):'—'}</b><small>{tokenStats.count} message{tokenStats.count===1?'':'s'} analysed</small></div><div><span>Average token rate</span><b>{tokenStats.avgRate?`${moneyExact(tokenStats.avgRate)}/kWh`:'—'}</b><small>{tokenStats.avgRate?'From imported SMS units':'Add kWh units to your SMS to see the rate'}</small></div><div><span>Trend</span><b className={`trend-text ${tokenStats.trend}`}>{trendLabel}</b><small>{tokenStats.count>1?(tokenStats.trend==='rising'?'Higher than earlier purchases':tokenStats.trend==='dropping'?'Lower than earlier purchases':'In line with earlier purchases'):'Add more messages to compare'}</small></div></div></section>}
