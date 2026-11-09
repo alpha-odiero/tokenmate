@@ -4,7 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   plugins: [react(), VitePWA({
-    registerType: 'prompt',
+    registerType: 'autoUpdate',
     injectRegister: false,
     includeAssets: ['favicon-32.png', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png'],
     manifest: {
@@ -30,6 +30,8 @@ export default defineConfig({
       ]
     },
     workbox: {
+      skipWaiting: true,
+      clientsClaim: true,
       globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
       navigateFallback: 'index.html',
       navigateFallbackDenylist: [/^\/downloads\//, /^\/\.well-known\//],
