@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/share-target", "destination": "/index.html" }
+  ]
+}

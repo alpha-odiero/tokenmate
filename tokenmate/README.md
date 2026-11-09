@@ -16,6 +16,7 @@ Live app: https://tokenmate.vercel.app/
 - Add your own name, your apartment mate's name and any additional apartment mates.
 - Settings toggle to enable message access for pasted or imported KPLC SMS messages.
 - Automatic extraction of amount, token number, units (kWh) and date from imported or pasted SMS.
+- Android share target: share a KPLC SMS from Messages, WhatsApp or another app directly into TokenMate, review the detected details and save it.
 - Token insights in Overview: average purchase amount, average token rate (KSh/kWh when units are available) and a rising/steady/dropping trend.
 - Manual payment entry, KSh 25 minimum and quick amount presets.
 - Paste KPLC SMS and attempt to extract amount, token number and date. Always review extracted values.
@@ -54,6 +55,12 @@ TWA verification uses `public/.well-known/assetlinks.json`, served at `https://t
 
 Signing material (`signing.keystore`, `signing-key-info.txt`) is intentionally not committed. Back it up securely.
 
+## Test the SMS import workflow
+1. Install TokenMate as a PWA on Android, then open a KPLC SMS in Messages or a messaging app.
+2. Choose **Share** and select TokenMate. The app opens the import screen with the message already loaded.
+3. Check the detected token, amount, units and date, then save. TokenMate blocks tokens that are already recorded.
+4. In browsers without a share target, use **Import token** on the Overview page and paste the SMS manually.
+
 ## Test the apartment workflow
 1. On Device A, open Settings and add your name, your apartment mate's name and any other apartment mates. Select the current device owner.
 2. Add a payment. Paste a sample KPLC SMS or enter the details manually.
@@ -65,7 +72,7 @@ Signing material (`signing.keystore`, `signing-key-info.txt`) is intentionally n
 The same flow works in either direction and with any number of apartment mates.
 
 ## Important limitations
-- A normal web PWA cannot silently read the phone's SMS inbox. Users must paste a copied SMS or import a text file. Native SMS reading would require a separately built Android application with appropriate permissions and store-policy review.
+- A normal web PWA cannot silently read the phone's SMS inbox. Users must share a KPLC SMS into TokenMate, paste a copied SMS or import a text file. Native SMS reading would require a separately built Android application with appropriate permissions and store-policy review.
 - WhatsApp does not expose read receipts to this app. Only the explicit in-app acknowledgement package changes a payment to acknowledged.
 - The acknowledgement package is a workflow confirmation, not cryptographic proof of identity or proof that KPLC issued the payment. A user could fabricate or edit a JSON file. Production-grade trust would require authentication and a backend or cryptographic identity/signature system.
 - The SMS parser is a best-effort starter parser; KPLC SMS formats can vary. Always verify the amount, token and date before saving.
@@ -75,5 +82,5 @@ The same flow works in either direction and with any number of apartment mates.
 1. Add sample SMS fixtures from real KPLC message formats and test the parser against them.
 2. Add QR transfer for small payloads, plus a stronger signed acknowledgement protocol.
 3. Add CSV export and transaction edit/audit history.
-4. Add Android share-target integration or a native Android companion if direct SMS import is essential.
+4. Add a native Android companion if direct SMS inbox reading is essential.
 5. Add end-to-end automated tests for payment parsing, import validation and acknowledgement state transitions.

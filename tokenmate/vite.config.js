@@ -21,6 +21,11 @@ export default defineConfig({
       prefer_related_applications: false,
       scope: '/',
       start_url: '/',
+      share_target: {
+        action: '/share-target',
+        method: 'GET',
+        params: { title: 'title', text: 'text', url: 'url' }
+      },
       categories: ['finance', 'utilities'],
       related_applications: [{ platform: 'webapp', url: '/manifest.webmanifest', id: '/' }],
       icons: [

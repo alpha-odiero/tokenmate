@@ -9,6 +9,7 @@ import {
   Smartphone, Sparkles, Trash2, TrendingDown, TrendingUp, Upload, Wallet, X, Zap
 } from 'lucide-react';
 import tokenMateLogo from './assets/TokenMate.png';
+import { parseTokenMessage } from './smsParser.js';
 import './style.css';
 
 const db = new Dexie('tokenmate-local-v1');
@@ -43,20 +44,6 @@ function setupServiceWorker(onUpdate) {
   });
 }
 
-function parseKplcSms(text) {
-  const raw = text.trim();
-  const amountMatch = raw.match(/(?:Kshs?|KES)\.?\s*([\d,]+(?:\.\d{1,2})?)/i) || raw.match(/(?:paid|payment|received).*?([\d,]+(?:\.\d{1,2})?)\s*(?:Kshs?|KES)/i);
-  const tokenMatch = raw.match(/(?:token(?:\s*(?:number|no\.?))?\s*[:#-]?\s*)(\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{0,4})/i) || raw.match(/\b\d{20}\b/);
-  const dateMatch = raw.match(/\b(\d{1,2}[/-][A-Za-z]{3}[/-]\d{2,4}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b/);
-  const unitsMatch = raw.match(/([\d,.]+)\s*(?:kwh|units?)/i) || raw.match(/units?\s*[:=-]?\s*([\d,.]+)/i);
-  const amount = amountMatch ? Number(amountMatch[1].replace(/,/g, '')) : '';
-  const token = tokenMatch ? cleanToken(tokenMatch[1] || tokenMatch[0]) : '';
-  const units = unitsMatch ? Number(unitsMatch[1].replace(/,/g, '')) : NaN;
-  let paidAt = new Date().toISOString();
-  if (dateMatch) { const parsed = new Date(dateMatch[1]); if (!Number.isNaN(parsed.getTime())) paidAt = parsed.toISOString(); }
-  return { amount: Number.isFinite(amount) ? amount : '', tokenNumber: token, paidAt, units: Number.isFinite(units) ? units : '' };
-}
-
 const standaloneModes = ['standalone', 'fullscreen', 'minimal-ui'];
 const isStandaloneMode = () => {
   if (typeof window === 'undefined') return false;
@@ -66,6 +53,25 @@ const isStandaloneMode = () => {
 };
 const APK_URL = '/downloads/TokenMate.apk';
 const isAndroidDevice = () => typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
+const getSharedMessage = () => {
+  if (typeof window === 'undefined' || window.location.pathname !== '/share-target') return null;
+  const params = new URLSearchParams(window.location.search);
+  return ['title', 'text', 'url'].map(key => (params.get(key) || '').trim()).filter(Boolean).join('\n').slice(0, 10000);
+};
+const toLocalInput = iso => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return new Date().toISOString().slice(0, 16);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+const formFromParsed = (parsed, defaultPayer) => ({
+  payer: defaultPayer,
+  amount: parsed.amount !== '' ? String(parsed.amount) : '',
+  tokenNumber: parsed.tokenNumber || '',
+  units: parsed.units !== '' ? String(parsed.units) : '',
+  paidAt: parsed.paidAt ? toLocalInput(parsed.paidAt) : new Date().toISOString().slice(0, 16),
+  notes: ''
+});
 
 function App() {
   const [page, setPage] = useState('dashboard');
@@ -74,13 +80,16 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [showReceive, setShowReceive] = useState(false);
+  const [initialShare] = useState(getSharedMessage);
+  const [showImport, setShowImport] = useState(initialShare !== null);
+  const [importSeed, setImportSeed] = useState(initialShare || '');
   const [toast, setToast] = useState('');
   const [installPrompt, setInstallPrompt] = useState(null);
   const [installed, setInstalled] = useState(isStandaloneMode);
   const [standalone, setStandalone] = useState(isStandaloneMode);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
   const [filter, setFilter] = useState('All');
-  const [landing, setLanding] = useState(() => !isStandaloneMode() && !sessionStorage.getItem('tokenmate-entered'));
+  const [landing, setLanding] = useState(() => initialShare === null && !isStandaloneMode() && !sessionStorage.getItem('tokenmate-entered'));
   const [mobileMenu, setMobileMenu] = useState(false);
   const [updateReady, setUpdateReady] = useState(false);
   const menuButtonRef = useRef(null);
@@ -108,6 +117,11 @@ function App() {
   useEffect(() => {
     setupServiceWorker(() => setUpdateReady(true));
   }, []);
+
+  useEffect(() => {
+    if (initialShare === null) return;
+    try { window.history.replaceState(null, '', '/'); } catch (e) {}
+  }, [initialShare]);
 
   useEffect(() => {
     const onBeforeInstall = e => { e.preventDefault(); setInstallPrompt(e); };
@@ -188,8 +202,10 @@ function App() {
     }
     return { count: sourced.length, avgAmount, avgRate, unitsCount: withUnits.length, trend, change: Math.abs(change) };
   }, [payments]);
+  const existingTokens = useMemo(() => new Set(payments.map(p => cleanToken(p.tokenNumber)).filter(Boolean)), [payments]);
 
   const enterApp = () => { sessionStorage.setItem('tokenmate-entered', '1'); setLanding(false); setPage('dashboard'); };
+  const openImport = (text = '') => { setImportSeed(String(text || '')); setShowImport(true); };
   const applyUpdate = () => { if (updateServiceWorker) updateServiceWorker(true); };
   const runInstallPrompt = async () => {
     if (!installPrompt) return;
@@ -233,7 +249,7 @@ function App() {
       <header className="topbar"><button className="mobile-brand" onClick={() => setPage('dashboard')}><BrandMark/><b>TokenMate</b></button><div className="breadcrumb">Workspace <ChevronRight size={14}/> <b>{nav.find(n=>n.id===page)?.label || 'Overview'}</b></div><div className="top-actions"><button className="icon-button" title="Help" onClick={() => setPage('about')}><CircleHelp size={19}/></button><button className="avatar top-avatar" onClick={() => setPage('settings')}>{(settings.myName||'Y').slice(0,1).toUpperCase()}</button><button ref={menuButtonRef} className="mobile-menu" type="button" aria-label={mobileMenu?'Close menu':'Open menu'} aria-controls="app-mobile-nav" aria-expanded={mobileMenu} onClick={() => setMobileMenu(v=>!v)}>{mobileMenu?<X size={20}/>:<Menu size={20}/>}</button></div></header>
       {mobileMenu && <div className="mobile-nav" id="app-mobile-nav" ref={menuPanelRef}>{nav.map(item=><button key={item.id} type="button" className={page===item.id?'active':''} onClick={()=>{setPage(item.id);setMobileMenu(false)}}><item.icon size={18}/>{item.label}</button>)}</div>}
       <div className="page-content">
-        {page==='dashboard' && <Dashboard settings={settings} totals={totals} tokenStats={tokenStats} payments={payments} onAdd={()=>setShowAdd(true)} onPage={setPage} onReceive={()=>setShowReceive(true)} />}
+        {page==='dashboard' && <Dashboard settings={settings} totals={totals} tokenStats={tokenStats} payments={payments} onAdd={()=>setShowAdd(true)} onPage={setPage} onReceive={()=>setShowReceive(true)} onImport={()=>openImport()} />}
         {page==='payments' && <PaymentsPage payments={visiblePayments} filter={filter} setFilter={setFilter} people={settings.members} onAdd={()=>setShowAdd(true)} onDelete={async p=>{if(p.acknowledgementStatus!=='acknowledged'){notify('This payment is locked until it is acknowledged.');return;} if(confirm('Delete this acknowledged payment?')){await db.payments.delete(p.id);setPayments(rows=>rows.filter(x=>x.id!==p.id));notify('Payment deleted.');}}} onShare={p=>sharePayment(p,notify)} />}
         {page==='messages' && <MessagesPage payments={payments} onReceive={()=>setShowReceive(true)} onShare={p=>sharePayment(p,notify)} onImportAck={async ack=>{const original=await db.payments.get(ack.paymentId);if(!original){notify('No matching payment was found.');return;} if(ack.type!=='tokenmate-ack' || ack.paymentId!==original.id){notify('This acknowledgement is not valid for this payment.');return;} const updated={...original, acknowledgementStatus:'acknowledged', acknowledgedAt:ack.acknowledgedAt||new Date().toISOString()};await savePayment(updated);notify('Acknowledgement received. Payment unlocked.');}} />}
         {page==='settings' && <SettingsPage settings={settings} onSave={saveSetting} onExport={async()=>{const data={format:'tokenmate-backup',version:1,exportedAt:new Date().toISOString(),payments,settings};downloadJson(data,'tokenmate-backup.json');notify('Backup downloaded.');}} onImport={async data=>{if(data?.format!=='tokenmate-backup'||!Array.isArray(data.payments)){notify('That backup file is not valid.');return;}for(const p of data.payments) await db.payments.put(p);setPayments(await db.payments.toArray());notify('Backup restored.');}} />}
@@ -242,6 +258,7 @@ function App() {
     </main>
     <nav className="bottom-nav">{nav.map(item=><button key={item.id} className={page===item.id?'selected':''} onClick={()=>setPage(item.id)}><item.icon size={19}/><span>{item.label}</span></button>)}</nav>
     {showAdd && <AddPaymentModal people={settings.members} defaultPayer={settings.myName} smsAccess={settings.smsAccess} onClose={()=>setShowAdd(false)} onSave={async p=>{await savePayment(p);setShowAdd(false);notify('Payment saved.');}} />}
+    {showImport && <ImportTokenModal initialText={importSeed} people={settings.members} defaultPayer={settings.myName} existingTokens={existingTokens} onClose={()=>{setShowImport(false);setImportSeed('');}} onSave={async p=>{await savePayment(p);setShowImport(false);setImportSeed('');notify('Token imported. Review it and acknowledge when ready.');setPage('messages');}} />}
     {showReceive && <ReceiveModal onClose={()=>setShowReceive(false)} onPayment={async p=>{if(await db.payments.get(p.id)){notify('This payment is already in your records.');return;}await savePayment({...p,receivedAt:new Date().toISOString(),receivedHere:true});setShowReceive(false);notify('Payment imported. Review it and acknowledge when ready.');setPage('messages');}} onAck={async ack=>{const original=await db.payments.get(ack.paymentId);if(!original){notify('No matching payment found.');return;}await savePayment({...original,acknowledgementStatus:'acknowledged',acknowledgedAt:ack.acknowledgedAt||new Date().toISOString()});setShowReceive(false);notify('Acknowledgement imported. Payment unlocked.');}} />}
     {toast && <div className="toast"><CheckCircleIcon/>{toast}</div>}
   </div>;
@@ -297,25 +314,68 @@ function InstallHelpModal({installed,installAvailable,onNativeInstall,onClose}){
   return <Modal title="Install TokenMate" subtitle="Add TokenMate to your home screen for the full app experience." onClose={onClose}><div className="modal-form">{installed?<div className="install-help-status"><CheckCircleIcon/><p>TokenMate is already installed on this device. Open it from your home screen or app list.</p></div>:<><ol className="install-steps">{steps.map((step,i)=><li key={i}><span>{i+1}</span><p>{step}</p></li>)}</ol>{isAndroid&&<div className="install-apk"><a className="button button-primary full-button" href={APK_URL} download="TokenMate.apk"><Download size={16}/> Download Android app (APK)</a>{installAvailable&&<button className="button button-outline full-button" onClick={onNativeInstall}><Smartphone size={16}/> Install from browser instead</button>}<p>After downloading, open the APK and allow installs from this browser when Android asks.</p></div>}</>}<div className="receive-tip"><ShieldCheck size={18}/><span>Installation requires HTTPS in production. After installing, TokenMate opens without browser bars and keeps working offline.</span></div><button className="button button-primary full-button" onClick={onClose}>Got it</button></div></Modal>;
 }
 
-function Dashboard({settings,totals,tokenStats,smsAccess,payments,onAdd,onPage,onReceive}){
+function Dashboard({settings,totals,tokenStats,smsAccess,payments,onAdd,onPage,onReceive,onImport}){
   const recent=payments.slice(0,4);const pending=payments.filter(p=>p.acknowledgementStatus==='pending').length;
   const TrendIcon=tokenStats.trend==='rising'?TrendingUp:tokenStats.trend==='dropping'?TrendingDown:Minus;
   const trendLabel=tokenStats.trend==='rising'?'Rising':tokenStats.trend==='dropping'?'Dropping':'Steady';
-  return <><div className="page-heading"><div><div className="eyebrow">YOUR APARTMENT</div><h1>{timeGreeting()}, {settings.myName}.</h1><p>Here's how your shared electricity contributions are looking.</p></div><div className="heading-actions"><button className="button button-outline" onClick={onReceive}><ArrowDownToLine size={17}/> Receive payment</button><button className="button button-primary" onClick={onAdd}><Plus size={18}/> Add payment</button></div></div>
+  return <><div className="page-heading"><div><div className="eyebrow">YOUR APARTMENT</div><h1>{timeGreeting()}, {settings.myName}.</h1><p>Here's how your shared electricity contributions are looking.</p></div><div className="heading-actions"><button className="button button-outline" onClick={onImport}><Clipboard size={17}/> Import token</button><button className="button button-outline" onClick={onReceive}><ArrowDownToLine size={17}/> Receive payment</button><button className="button button-primary" onClick={onAdd}><Plus size={18}/> Add payment</button></div></div>
     <div className="welcome-banner"><div className="banner-copy"><span className="banner-kicker"><Sparkles size={14}/> APARTMENT POWER SUMMARY</span><h2>Keep the power on.<br/><span>Keep everything clear.</span></h2><p>Every contribution deserves a clear record.</p></div><div className="banner-art"><div className="banner-circle"><img className="banner-logo" src={tokenMateLogo} alt="TokenMate" /></div><div className="banner-spark spark-a">✦</div><div className="banner-spark spark-b">✧</div></div></div>
     <div className="stats-grid"><StatCard label="Total contributions" value={money(totals.total)} note={`${totals.count} recorded payment${totals.count===1?'':'s'}`} icon={Wallet} tone="blue"/>{totals.byMember.map((m,i)=><StatCard key={m.name} label={m.name} value={money(m.total)} note="Total paid so far" icon={Activity} tone={['yellow','purple','green','blue'][i%4]}/>)}<StatCard label="Contribution gap" value={money(totals.difference)} note={totals.difference===0?'Everyone is currently even':`${totals.top.name} has paid more`} icon={Zap} tone="green"/></div>
     {smsAccess && <section className="panel token-insights"><div className="panel-heading"><div><h3>Token insights</h3><p>Calculated from your saved KPLC SMS messages</p></div><span className={`trend-pill ${tokenStats.trend}`}><TrendIcon size={14}/> {trendLabel}{tokenStats.count>1?` ${tokenStats.change.toFixed(1)}%`:''}</span></div><div className="insight-metrics"><div><span>Average per purchase</span><b>{tokenStats.count?money(tokenStats.avgAmount):'—'}</b><small>{tokenStats.count} message{tokenStats.count===1?'':'s'} analysed</small></div><div><span>Average token rate</span><b>{tokenStats.avgRate?`${moneyExact(tokenStats.avgRate)}/kWh`:'—'}</b><small>{tokenStats.avgRate?'From imported SMS units':'Add kWh units to your SMS to see the rate'}</small></div><div><span>Trend</span><b className={`trend-text ${tokenStats.trend}`}>{trendLabel}</b><small>{tokenStats.count>1?(tokenStats.trend==='rising'?'Higher than earlier purchases':tokenStats.trend==='dropping'?'Lower than earlier purchases':'In line with earlier purchases'):'Add more messages to compare'}</small></div></div></section>}
     <div className="content-grid"><section className="panel recent-panel"><div className="panel-heading"><div><h3>Recent payments</h3><p>Your latest token contributions</p></div><button className="text-button" onClick={()=>onPage('payments')}>View all <ChevronRight size={16}/></button></div>{recent.length?<div className="payment-list">{recent.map(p=><PaymentRow key={p.id} payment={p}/>)}</div>:<EmptyState icon={ReceiptText} title="No payments yet" text="Add your first KPLC token payment to start your apartment ledger."/>}</section>
-    <section className="panel action-panel"><div className="panel-heading"><div><h3>Quick actions</h3><p>Keep your records moving</p></div><span className="quick-bolt"><Zap size={17}/></span></div><button className="quick-action" onClick={onAdd}><span className="quick-icon yellow-bg"><Plus/></span><span><b>Record a payment</b><small>Add amount, token and SMS evidence</small></span><ChevronRight/></button><button className="quick-action" onClick={onReceive}><span className="quick-icon blue-bg"><ArrowDownToLine/></span><span><b>Receive a payment</b><small>Import a record from a apartment mate</small></span><ChevronRight/></button><button className="quick-action" onClick={()=>onPage('messages')}><span className="quick-icon purple-bg"><MessageCircle/></span><span><b>Review shared messages</b><small>{pending?`${pending} payment${pending===1?'':'s'} awaiting acknowledgement`:'Check acknowledgements and replies'}</small></span><ChevronRight/></button></section></div>
+    <section className="panel action-panel"><div className="panel-heading"><div><h3>Quick actions</h3><p>Keep your records moving</p></div><span className="quick-bolt"><Zap size={17}/></span></div><button className="quick-action" onClick={onAdd}><span className="quick-icon yellow-bg"><Plus/></span><span><b>Record a payment</b><small>Add amount, token and SMS evidence</small></span><ChevronRight/></button><button className="quick-action" onClick={onImport}><span className="quick-icon blue-bg"><Clipboard/></span><span><b>Import a token from SMS</b><small>Paste a KPLC message and confirm the details</small></span><ChevronRight/></button><button className="quick-action" onClick={onReceive}><span className="quick-icon blue-bg"><ArrowDownToLine/></span><span><b>Receive a payment</b><small>Import a record from a apartment mate</small></span><ChevronRight/></button><button className="quick-action" onClick={()=>onPage('messages')}><span className="quick-icon purple-bg"><MessageCircle/></span><span><b>Review shared messages</b><small>{pending?`${pending} payment${pending===1?'':'s'} awaiting acknowledgement`:'Check acknowledgements and replies'}</small></span><ChevronRight/></button></section></div>
   </>;
 }
 function StatCard({label,value,note,icon:Icon,tone}){return <article className="stat-card"><div className="stat-top"><span>{label}</span><span className={`stat-icon ${tone}`}><Icon size={18}/></span></div><strong>{value}</strong><small>{note}</small></article>}
 function PaymentRow({payment:p}){return <div className="payment-row"><div className="payment-symbol"><Zap size={19}/></div><div className="payment-main"><b>{p.payer} <span>·</span> KPLC token</b><small>{dateLabel(p.paidAt)} {p.tokenNumber?`· Token ending ${p.tokenNumber.slice(-4)}`:''}</small></div><div className="payment-right"><b>{money(p.amount)}</b><span className={`status ${p.acknowledgementStatus}`}>{p.acknowledgementStatus==='acknowledged'?<><CheckCheck size={12}/> Acknowledged</>:<><Clock3 size={12}/> Awaiting</>}</span></div></div>}
 function EmptyState({icon:Icon,title,text}){return <div className="empty-state"><span><Icon size={23}/></span><b>{title}</b><p>{text}</p></div>}
 
+function ImportTokenModal({initialText='',people,defaultPayer,existingTokens,onClose,onSave}){
+  const [sms,setSms]=useState(initialText);
+  const [parsed,setParsed]=useState(()=>parseTokenMessage(initialText));
+  const [form,setForm]=useState(()=>formFromParsed(parseTokenMessage(initialText),defaultPayer));
+  const [error,setError]=useState('');
+  const update=(key,value)=>setForm(f=>({...f,[key]:value}));
+  const extract=text=>{
+    const value=String(text||'');
+    const result=parseTokenMessage(value);
+    setSms(value);
+    setParsed(result);
+    setForm(f=>({...f,amount:result.amount!==''?String(result.amount):'',tokenNumber:result.tokenNumber||'',units:result.units!==''?String(result.units):'',paidAt:result.paidAt?toLocalInput(result.paidAt):new Date().toISOString().slice(0,16)}));
+    return result;
+  };
+  const extractCurrent=()=>{const result=extract(sms);setError(result.tokenNumber?'':'No 20-digit token was found in this message. You can still enter it below.');};
+  const submit=async e=>{
+    e.preventDefault();
+    const token=cleanToken(form.tokenNumber);
+    const n=Number(form.amount);
+    const when=new Date(form.paidAt);
+    if(!form.payer){setError('Choose who made this payment.');return;}
+    if(!Number.isFinite(n)||n<25){setError('The contribution must be at least KSh 25.');return;}
+    if(!Number.isInteger(n*100)){setError('Enter a valid amount.');return;}
+    if(token.length!==20){setError('A KPLC token number should contain 20 digits. Check the message and try again.');return;}
+    if(existingTokens?.has(token)){setError('This token number is already recorded. Check your payment history before importing it again.');return;}
+    if(Number.isNaN(when.getTime())){setError('Enter a valid payment date and time.');return;}
+    await onSave({id:uid(),payer:form.payer,amount:n,tokenNumber:token,units:form.units!==''?Number(form.units):null,paidAt:when.toISOString(),originalSms:sms.trim(),notes:form.notes.trim(),smsSender:parsed.sender||'',transactionRef:parsed.transactionRef||'',importSource:'sms',createdAt:new Date().toISOString(),acknowledgementStatus:'pending',acknowledgedAt:null,version:1});
+  };
+  const detected=Boolean(parsed.tokenNumber||parsed.amount!==''||parsed.units!==''||parsed.paidAt||parsed.sender||parsed.transactionRef);
+  return <Modal title="Import a token from SMS" subtitle="Paste the KPLC message, check the detected details, then save it to your shared records." onClose={onClose}><form onSubmit={submit} className="modal-form">
+    <div className="field"><label>KPLC SMS or token message</label><textarea rows="5" placeholder="Paste the SMS you received from KPLC or M-PESA…" value={sms} onChange={e=>setSms(e.target.value)} onPaste={e=>{const pasted=e.clipboardData?.getData('text')||'';if(pasted)extract(pasted);}}/><div className="sms-tools"><button type="button" className="text-button parse-button" onClick={extractCurrent}><Sparkles size={15}/> Extract details</button><label className="text-button sms-file-label"><Upload size={14}/> Import .txt SMS<input type="file" accept=".txt,text/plain" onChange={async e=>{const f=e.target.files?.[0];if(f)extract(await f.text());e.target.value='';}}/></label></div><small className="field-help">TokenMate only reads the text you paste or share. It never asks for SMS inbox access.</small></div>
+    {detected&&<div className="receive-tip"><ShieldCheck size={18}/><span>Detected{parsed.sender?` from ${parsed.sender}`:''}{parsed.transactionRef?` · Ref ${parsed.transactionRef}`:''}. Check every field before saving.{!parsed.paidAt?' No payment date was found; set it manually.':''}</span></div>}
+    <div className="field"><label>Who made this payment?</label><div className="choice-row">{people.map((p,i)=><button type="button" key={p} className={`choice ${form.payer===p?'chosen':''}`} onClick={()=>update('payer',p)}><span className={`choice-avatar c${i}`}>{p.slice(0,1).toUpperCase()}</span>{p}</button>)}</div></div>
+    <div className="field"><label>Contribution amount <span className="required">*</span></label><div className="amount-input"><span>KSh</span><input type="number" min="25" step="1" placeholder="e.g. 500" value={form.amount} onChange={e=>update('amount',e.target.value)} required/></div><small className="field-help">Minimum contribution: KSh 25</small></div>
+    <div className="field"><label>Payment date & time</label><input type="datetime-local" value={form.paidAt} onChange={e=>update('paidAt',e.target.value)} required/></div>
+    <div className="field"><label>20-digit token number <span className="required">*</span></label><input value={form.tokenNumber} onChange={e=>update('tokenNumber',e.target.value)} placeholder="Enter token number" inputMode="numeric" maxLength={24}/><small className="field-help">The token must contain exactly 20 digits.</small></div>
+    <div className="field"><label>Units (kWh) <span className="optional">Optional</span></label><input value={form.units} onChange={e=>update('units',e.target.value)} placeholder="e.g. 6.8" inputMode="decimal"/></div>
+    <div className="field"><label>Notes <span className="optional">Optional</span></label><input value={form.notes} onChange={e=>update('notes',e.target.value)} placeholder="e.g. Imported from the KPLC SMS"/></div>
+    {error&&<div className="form-error">{error}</div>}
+    <div className="modal-foot"><span><ShieldCheck size={15}/> Imported only after you confirm</span><button className="button button-primary" type="submit"><Check size={17}/> Save imported token</button></div>
+  </form></Modal>;
+}
+
 function AddPaymentModal({people,defaultPayer,smsAccess,onClose,onSave}){
   const [payer,setPayer]=useState(defaultPayer);const [amount,setAmount]=useState('');const [tokenNumber,setTokenNumber]=useState('');const [units,setUnits]=useState('');const [paidAt,setPaidAt]=useState(new Date().toISOString().slice(0,16));const [sms,setSms]=useState('');const [notes,setNotes]=useState('');const [error,setError]=useState('');
-  const applySms=text=>{if(!String(text||'').trim())return;const result=parseKplcSms(text);if(result.amount)setAmount(String(result.amount));if(result.tokenNumber)setTokenNumber(result.tokenNumber);if(result.units)setUnits(String(result.units));if(result.paidAt) setPaidAt(new Date(result.paidAt).toISOString().slice(0,16));};
+  const applySms=text=>{if(!String(text||'').trim())return;const result=parseTokenMessage(text);if(result.amount)setAmount(String(result.amount));if(result.tokenNumber)setTokenNumber(result.tokenNumber);if(result.units)setUnits(String(result.units));if(result.paidAt) setPaidAt(new Date(result.paidAt).toISOString().slice(0,16));};
   const parse=()=>applySms(sms);
   const readSms=text=>{setSms(text);if(smsAccess)applySms(text);};
   const submit=async e=>{e.preventDefault();const n=Number(amount);if(!Number.isFinite(n)||n<25){setError('The contribution must be at least KSh 25.');return;}if(!Number.isInteger(n*100)){setError('Enter a valid amount.');return;}if(tokenNumber && cleanToken(tokenNumber).length!==20){setError('A KPLC token number should contain 20 digits. Check the number or leave it blank.');return;}await onSave({id:uid(),payer,amount:n,tokenNumber:cleanToken(tokenNumber),units:units?Number(units):null,paidAt:new Date(paidAt).toISOString(),originalSms:sms.trim(),notes:notes.trim(),createdAt:new Date().toISOString(),acknowledgementStatus:'pending',acknowledgedAt:null,version:1});};
@@ -332,7 +392,7 @@ function AboutPage(){return <><div className="page-heading"><div><div className=
 
 function Modal({title,subtitle,onClose,children}){return <div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}><section className="modal"><div className="modal-header"><div><h2>{title}</h2><p>{subtitle}</p></div><button className="icon-button" onClick={onClose}><X/></button></div>{children}</section></div>}
 function ReceiveModal({onClose,onPayment,onAck}){const [text,setText]=useState('');const [error,setError]=useState('');const [parsed,setParsed]=useState(null);const [kind,setKind]=useState('payment');const parse=()=>{try{const obj=JSON.parse(text);if(obj.type==='tokenmate-ack'){setKind('ack');setParsed(obj);setError('');return;}if(obj.type==='tokenmate-payment'&&obj.payment?.id&&typeof obj.payment.payer==='string'&&Number.isFinite(Number(obj.payment.amount))&&Number(obj.payment.amount)>=25&&!Number.isNaN(new Date(obj.payment.paidAt).getTime())){setKind('payment');setParsed(obj.payment);setError('');return;}if(obj.format==='tokenmate-backup'){setError('This is a full backup. Use Settings → Restore a backup instead.');return;}setError('This does not look like a TokenMate payment or acknowledgement package.');}catch{setError('Paste the complete JSON package shared by the other person.');}};return <Modal title="Receive a shared message" subtitle="Paste the TokenMate package or choose a JSON file shared by the other person." onClose={onClose}><div className="modal-form"><div className="receive-tip"><MessageCircle size={18}/><span>In WhatsApp, open the shared file and copy its contents, or download the JSON file to this device.</span></div><textarea rows="7" value={text} onChange={e=>{setText(e.target.value);setParsed(null);}} placeholder="Paste the shared TokenMate JSON package here…"/><label className="button button-outline file-label full-file"><Upload size={16}/> Choose JSON file<input type="file" accept="application/json,.json,text/plain" onChange={async e=>{const f=e.target.files?.[0];if(f)setText(await f.text());}}/></label><button className="button button-primary full-button" onClick={parse}>Preview received package</button>{error&&<div className="form-error">{error}</div>}{parsed&&<div className="received-preview"><div className="received-preview-head"><CheckCircleIcon/>{kind==='ack'?'Acknowledgement package found':'Payment package found'}</div>{kind==='payment'?<><h3>{parsed.payer} · {money(parsed.amount)}</h3><p>{dateLabel(parsed.paidAt)}</p><p>{parsed.tokenNumber?`Token number ending ${parsed.tokenNumber.slice(-4)}`:'No token number included'}</p><p className="preview-disclaimer">Review the original SMS and details after importing. Only import records from someone you trust.</p><button className="button button-primary full-button" onClick={()=>onPayment(parsed)}>Import this payment</button></>:<><p>Payment ID: {parsed.paymentId}</p><p>This acknowledgement will unlock the matching payment on the original sender's device.</p><button className="button button-primary full-button" onClick={()=>onAck(parsed)}>Import acknowledgement</button></>}</div>}</div></Modal>}
-function PaymentPreview({payment:p,onClose,onShare,onAcknowledge}){return <Modal title="Payment evidence" subtitle="Review the details saved with this payment." onClose={onClose}><div className="evidence-preview"><div className="evidence-amount">{money(p.amount)}</div><span className={`status ${p.acknowledgementStatus}`}>{p.acknowledgementStatus==='acknowledged'?'Acknowledged':'Awaiting acknowledgement'}</span><div className="evidence-details"><div><span>Paid by</span><b>{p.payer}</b></div><div><span>Date & time</span><b>{dateLabel(p.paidAt)}</b></div><div><span>Token number</span><b>{p.tokenNumber||'Not provided'}</b></div><div><span>Units</span><b>{p.units?`${p.units} kWh`:'Not provided'}</b></div><div><span>Record ID</span><b className="id-text">{p.id}</b></div></div><div className="original-sms"><b><FileText size={15}/> Original KPLC SMS</b><p>{p.originalSms||'No original SMS was attached to this payment.'}</p></div>{p.notes&&<div className="original-sms"><b>Notes</b><p>{p.notes}</p></div>}<div className="preview-actions"><button className="button button-outline" onClick={onShare}><Send size={16}/> Share payment</button>{onAcknowledge&&<button className="button button-primary" onClick={onAcknowledge}><CheckCheck size={16}/> Acknowledge & share</button>}</div></div></Modal>}
+function PaymentPreview({payment:p,onClose,onShare,onAcknowledge}){return <Modal title="Payment evidence" subtitle="Review the details saved with this payment." onClose={onClose}><div className="evidence-preview"><div className="evidence-amount">{money(p.amount)}</div><span className={`status ${p.acknowledgementStatus}`}>{p.acknowledgementStatus==='acknowledged'?'Acknowledged':'Awaiting acknowledgement'}</span><div className="evidence-details"><div><span>Paid by</span><b>{p.payer}</b></div><div><span>Date & time</span><b>{dateLabel(p.paidAt)}</b></div><div><span>Token number</span><b>{p.tokenNumber||'Not provided'}</b></div><div><span>Units</span><b>{p.units?`${p.units} kWh`:'Not provided'}</b></div>{p.smsSender&&<div><span>Sender</span><b>{p.smsSender}</b></div>}{p.transactionRef&&<div><span>Transaction ref</span><b>{p.transactionRef}</b></div>}<div><span>Record ID</span><b className="id-text">{p.id}</b></div></div><div className="original-sms"><b><FileText size={15}/> Original KPLC SMS</b><p>{p.originalSms||'No original SMS was attached to this payment.'}</p></div>{p.notes&&<div className="original-sms"><b>Notes</b><p>{p.notes}</p></div>}<div className="preview-actions"><button className="button button-outline" onClick={onShare}><Send size={16}/> Share payment</button>{onAcknowledge&&<button className="button button-primary" onClick={onAcknowledge}><CheckCheck size={16}/> Acknowledge & share</button>}</div></div></Modal>}
 
 async function sharePayment(payment,notify){const payload={type:'tokenmate-payment',version:1,sharedAt:new Date().toISOString(),payment};const json=JSON.stringify(payload,null,2);const filename=`tokenmate-payment-${payment.id.slice(0,8)}.json`;const summary=`TokenMate payment record\nPaid by: ${payment.payer}\nAmount: ${money(payment.amount)}\nDate: ${dateLabel(payment.paidAt)}\nToken: ${payment.tokenNumber||'Not provided'}\n\nTo review the original evidence, import the attached TokenMate JSON package in TokenMate. After reviewing, acknowledge the payment and send the acknowledgement package back.`;
   try{const file=new File([json],filename,{type:'application/json'});if(navigator.canShare?.({files:[file]})&&navigator.share){await navigator.share({title:'TokenMate payment evidence',text:summary,files:[file]});return;}if(navigator.share){await navigator.share({title:'TokenMate payment evidence',text:`${summary}\n\nPackage JSON:\n${json}`});return;}}catch(e){if(e.name==='AbortError')return;}
