@@ -13,8 +13,11 @@ Live app: https://tokenmate.vercel.app/
 ## Features in this MVP
 - Responsive landing page and app dashboard.
 - Installable PWA with offline app-shell caching.
+- First-run setup requires your name and your apartment mate's name before the dashboard opens.
 - Add your own name, your apartment mate's name and any additional apartment mates.
 - Settings toggle to enable message access for pasted or imported KPLC SMS messages.
+- Settings toggle to enable or disable deleting payments from Payment history.
+- Light and dark appearance modes, saved per device with a Settings toggle.
 - Automatic extraction of amount, token number, units (kWh) and date from imported or pasted SMS.
 - Android share target: share a KPLC SMS from Messages, WhatsApp or another app directly into TokenMate, review the detected details and save it.
 - Token insights in Overview: average purchase amount, average token rate (KSh/kWh when units are available) and a rising/steady/dropping trend.
@@ -22,12 +25,12 @@ Live app: https://tokenmate.vercel.app/
 - Saved-payment receipts with unique TokenMate references, Nairobi timestamps, print, PDF download and device sharing.
 - Paste KPLC SMS and attempt to extract amount, token number and date. Always review extracted values.
 - Payment history, per-person totals and contribution difference.
-- Apartment power forecast based on recorded token units and dated meter-balance readings, with an explicit estimated/unknown state when the data is insufficient.
+- Current power status based only on recorded token units and dated meter-balance readings, never contribution amounts, with explicit Unknown states and data-integrity warnings when the data is insufficient or inconsistent.
 - Configurable 7-, 3- and 1-day browser alerts, with a deduplicated local notification history.
 - Preview original SMS evidence.
 - Share payment packages with any apartment mate using the device share sheet when supported; fallback downloads JSON and opens WhatsApp with a message to attach it.
 - Receive/import payment JSON and export an explicit acknowledgement JSON, so mates can share payments with you and you can share yours with them.
-- Sender imports acknowledgement; only acknowledged payments can be deleted.
+- Sender imports acknowledgement; payment deletion is controlled by a Settings toggle.
 - Export/restore JSON backups.
 
 ## Requirements
